@@ -1,0 +1,8 @@
+__pycache__/
+*.log
+*.mp4
+*.h5
+*.keras
+*.png
+*.jpg
+myvenv/
