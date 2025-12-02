@@ -8,9 +8,7 @@ import time
 import ultraSonic
 import shutil
 import numpy as np
-import RPi.GPIO as GPIO
-
-cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
+import RPi.GPIO as GPIOs
 
 model_path = "/home/pi/DoAn/trash_16_cls_grayscale_finetuned_noLambda.keras"
 model = tf.keras.models.load_model(model_path)
@@ -18,7 +16,7 @@ model = tf.keras.models.load_model(model_path)
 img_path = 'test.jpg'
 img_current_path = 'current.jpg'
 img_pre_path = 'previous.jpg'
-CAPTURE_INTERVAL = 2
+CAPTURE_INTERVAL = 1
 check_object_change = False
 DEFAULT_PIXEL_DIFF_THRESHOLD = 40
 DEFAULT_MAJOR_CHANGE_PERCENT = 5
@@ -74,17 +72,18 @@ def is_object_changed(
 	changed_pixels_count = np.sum(mask == 255)
 		
 	required_change_count = total_area * (change_threshold_percent / 100.0)
-	print(f'Change pixels: {changed_pixels_count}, required_change_count: {required_change_count}')
+	#print(f'Change pixels: {changed_pixels_count}, required_change_count: {required_change_count}')
 	if changed_pixels_count > required_change_count: return True
 	else: return False
 			
 def scoreLess50():
-	print('Vui long chon loai rac!')
-	#screen.AddressLW(6, 2)  # warning
-	#time.sleep(1)
+	screen.AddressLW(8,2) # turn off notification
+	print('CHON RAC')
 	screen.AddressLW(11, 4)  # change window
 	# get option
 	select = True
+	for i in range(0,4):
+		print(f"TOGGLE:{screen.AddressReadLB(i)}")
 	while select:
 		if screen.AddressReadLB(3)>0: 
 			kien.trashCan(1)
@@ -98,8 +97,12 @@ def scoreLess50():
 		if screen.AddressReadLB(2)>0: 
 			kien.trashCan(4)
 			select = False
-		
-		ret, frame = cap.read()
+			
+		if select ==  False:
+			screen.AddressLW(7, 2) # notify: thankyou for helping
+			time.sleep(2) 
+		for _ in range(10):
+			ret, frame = cap.read()
 		if not ret or frame is None:
 			print("Failed to grab frame")
 		else:
@@ -110,13 +113,10 @@ def scoreLess50():
 		time.sleep(CAPTURE_INTERVAL)
 		if check: 
 			print('a new object appeared')
-			break
+			return
 	
 	# reset toggles
 	screen.AddressWriteLB()
-			
-	screen.AddressLW(7, 2) # notify: thankyou for helping
-	time.sleep(10)
 	screen.AddressLW(8,2)
 	
 def scoreGreater50():
@@ -130,22 +130,31 @@ def scoreGreater50():
 	
 	screen.AddressLW(5,2) # notify: thank you
 	time.sleep(1)
+	screen.AddressLW(8,2) # turn off notification
 
 if __name__ == '__main__':
+	cap = cv2.VideoCapture(0, cv2.CAP_V4L2)
 	set_up()
+	begin = True
 	while True:
 		screen.AddressLW(10, 4)
-		"""
 		distance1 = ultraSonic.getDistance(23,24)
 		distance2 = ultraSonic.getDistance(5,6)
-		while distance1 <= -2 or distance2 <= -2:
-			screen.AddressLW(4, 2)
+		while distance1 <= 2 or distance2 <= 2:
+			screen.AddressLW(9, 2)
 			print(f'khoang  cach qua nho: {distance1}, {distance2}')
 		else: screen.AddressLW(8,2)
-		"""
+		
+		if begin: 
+			time.sleep(5)
+			begin = False
+		screen.AddressLW(4,2) # San sang
+		print("START")
+		time.sleep(CAPTURE_INTERVAL)
 		
 		while check_object_change == False:
-			ret, frame = cap.read()
+			for _ in range(10):
+				ret, frame = cap.read()
 			if not ret or frame is None:
 				print("Failed to grab frame")
 			else:
@@ -157,21 +166,22 @@ if __name__ == '__main__':
 				check_object_change = False
 				break
 				
-		predicted_name, predicted_score = deployModel.predict_single_image(model,img_path)
+		screen.AddressLW(3,2) # dang phan loai
+		predicted_name, predicted_score = deployModel.predict_frame(model,img_path)
 		#os.remove(img_path)
 		
-		if predicted_score <0.5:
+		if predicted_score > 0 and predicted_score < 0.45:
 			scoreLess50()
 				
 		elif predicted_score >= 0.5:
 			scoreGreater50()
 			
-		#screen.AddressLW(12, 4) # change to main window
-		
+		screen.AddressLW(10,4) # change window
+		screen.AddressLW(8,4) # turn of notification
+			
 		#cv2.imshow('Test', frame)
 		shutil.copy(img_path, img_pre_path)
-		
-		time.sleep(CAPTURE_INTERVAL)
+	
 		#break
 		if cv2.waitKey(1) == ord("q"):
 			break
